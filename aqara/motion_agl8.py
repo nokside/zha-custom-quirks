@@ -597,7 +597,7 @@ class FP300LedIndicatorOffTimeNumber(NumberConfigurationEntity):
     .number(
         attribute_name="temperature_report_threshold",
         cluster_id=FP300ManufacturerCluster.cluster_id,
-        device_class=NumberDeviceClass.TEMPERATURE,
+        device_class=NumberDeviceClass.TEMPERATURE_DELTA,
         min_value=0.2,
         max_value=3.0,
         step=0.1,

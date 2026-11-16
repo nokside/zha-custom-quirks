@@ -3,7 +3,7 @@
 from typing import Any, Final
 
 from zigpy import types as t
-from zigpy.zcl import AttributeReadEvent, AttributeReportedEvent, foundation
+from zigpy.zcl import AttributeReportedEvent, foundation
 from zigpy.zcl.clusters.security import IasZone
 from zigpy.zcl.foundation import BaseAttributeDefs, ZCLAttributeDef
 
@@ -47,27 +47,21 @@ class MagnetE1ManufacturerCluster(CustomCluster):
         aqara_heartbeat: Final = ZCLAttributeDef(
             id=0x00F7,
             type=t.LVBytes,
-            access="rp",
+            access="p",
             manufacturer_code=AQARA_MFG_CODE,
         )
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the E1 manufacturer cluster."""
         super().__init__(*args, **kwargs)
-        for event_type in (AttributeReadEvent, AttributeReportedEvent):
-            self.on_event(event_type.event_type, self._handle_attribute_event)
+        self.on_event(AttributeReportedEvent.event_type, self._handle_attribute_event)
 
-    def _handle_attribute_event(
-        self, event: AttributeReadEvent | AttributeReportedEvent
-    ) -> None:
+    def _handle_attribute_event(self, event: AttributeReportedEvent) -> None:
         """Handle manufacturer attribute events."""
         if event.attribute_id == self.AttributeDefs.aqara_heartbeat.id:
-            self._handle_heartbeat(
-                event.value,
-                is_reported_event=isinstance(event, AttributeReportedEvent),
-            )
+            self._handle_heartbeat(event.value)
 
-    def _handle_heartbeat(self, data: bytes, is_reported_event: bool) -> None:
+    def _handle_heartbeat(self, data: bytes) -> None:
         """Parse Door and Window Sensor E1 heartbeat."""
         while len(data) >= 2:
             tag = data[0]
@@ -86,7 +80,7 @@ class MagnetE1ManufacturerCluster(CustomCluster):
 
             if tag == 0x01:
                 self.endpoint.power.battery_reported(value)
-            elif is_reported_event and tag == 0x64:
+            elif tag == 0x64:
                 zone_status_attr = IasZone.AttributeDefs.zone_status.id
                 current_status = self.endpoint.ias_zone.get(zone_status_attr) or 0
                 alarm_bit = IasZone.ZoneStatus.Alarm_1
@@ -99,7 +93,6 @@ class MagnetE1ManufacturerCluster(CustomCluster):
     async def apply_custom_configuration(self, *args, **kwargs):
         """Read Door and Window Sensor E1 attributes."""
         try:
-            await self.read_attributes([self.AttributeDefs.aqara_heartbeat.id])
             await self.endpoint.ias_zone.read_attributes(
                 [IasZone.AttributeDefs.zone_status.id]
             )

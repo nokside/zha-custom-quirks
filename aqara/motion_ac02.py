@@ -4,7 +4,7 @@ import asyncio
 from typing import Any, Final
 
 from zigpy import types as t
-from zigpy.zcl import AttributeReadEvent, AttributeReportedEvent, foundation
+from zigpy.zcl import AttributeReportedEvent, foundation
 from zigpy.zcl.clusters.measurement import IlluminanceMeasurement, OccupancySensing
 from zigpy.zcl.foundation import BaseAttributeDefs, DataTypeId, ZCLAttributeDef
 
@@ -89,38 +89,29 @@ class MotionP1ManufacturerCluster(CustomCluster):
         aqara_heartbeat: Final = ZCLAttributeDef(
             id=0x00F7,
             type=t.LVBytes,
-            access="rp",
+            access="p",
             manufacturer_code=AQARA_MFG_CODE,
         )
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the P1 manufacturer cluster."""
         super().__init__(*args, **kwargs)
-        for event_type in (AttributeReadEvent, AttributeReportedEvent):
-            self.on_event(event_type.event_type, self._handle_attribute_event)
+        self.on_event(AttributeReportedEvent.event_type, self._handle_attribute_event)
 
-    def _handle_attribute_event(
-        self, event: AttributeReadEvent | AttributeReportedEvent
-    ) -> None:
+    def _handle_attribute_event(self, event: AttributeReportedEvent) -> None:
         """Handle manufacturer attribute events."""
         if event.attribute_id == self.AttributeDefs.aqara_heartbeat.id:
-            self._handle_heartbeat(
-                event.value,
-                is_reported_event=isinstance(event, AttributeReportedEvent),
-            )
+            self._handle_heartbeat(event.value)
 
-        elif (
-            isinstance(event, AttributeReportedEvent)
-            and event.attribute_id == self.AttributeDefs.motion_illuminance.id
-        ):
+        elif event.attribute_id == self.AttributeDefs.motion_illuminance.id:
             self.endpoint.illuminance.update_attribute(
                 IlluminanceMeasurement.AttributeDefs.measured_value.id,
                 event.value - 65536,
             )
             self.endpoint.occupancy.set_occupied()
 
-    def _handle_heartbeat(self, data: bytes, is_reported_event: bool) -> None:
-        """Parse P1 heartbeat; battery from any event, the rest from reports only."""
+    def _handle_heartbeat(self, data: bytes) -> None:
+        """Parse P1 heartbeat."""
         while len(data) >= 2:
             tag = data[0]
 
@@ -138,30 +129,33 @@ class MotionP1ManufacturerCluster(CustomCluster):
 
             if tag == 0x01:
                 self.endpoint.power.battery_reported(value)
-            elif is_reported_event:
-                if tag == 0x65:
-                    self.endpoint.illuminance.update_attribute(
-                        IlluminanceMeasurement.AttributeDefs.measured_value.id,
-                        value,
-                    )
-                elif tag == 0x69:
-                    self.update_attribute(
-                        self.AttributeDefs.detection_interval.id, value
-                    )
-                elif tag == 0x6A:
-                    self.update_attribute(
-                        self.AttributeDefs.motion_sensitivity.id, value
-                    )
-                elif tag == 0x6B:
-                    self.update_attribute(
-                        self.AttributeDefs.led_trigger_indicator.id, value
-                    )
+            elif tag == 0x65:
+                self.endpoint.illuminance.update_attribute(
+                    IlluminanceMeasurement.AttributeDefs.measured_value.id,
+                    value,
+                )
+            elif tag == 0x69:
+                self.update_attribute(
+                    self.AttributeDefs.detection_interval.id, value
+                )
+            elif tag == 0x6A:
+                self.update_attribute(
+                    self.AttributeDefs.motion_sensitivity.id, value
+                )
+            elif tag == 0x6B:
+                self.update_attribute(
+                    self.AttributeDefs.led_trigger_indicator.id, value
+                )
 
     async def apply_custom_configuration(self, *args, **kwargs):
         """Read P1 attributes."""
         try:
             await self.read_attributes(
-                [attr.id for attr in self.AttributeDefs]
+                [
+                    attr.id
+                    for attr in self.AttributeDefs
+                    if attr.access and foundation.ZCLAttributeAccess.Read in attr.access
+                ]
             )
         except Exception as exc:  # noqa: BLE001
             self.debug("Failed to read attributes: %s", exc, exc_info=True)

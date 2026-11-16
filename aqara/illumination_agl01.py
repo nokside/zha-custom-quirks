@@ -5,7 +5,6 @@ from typing import Any, Final
 
 from zigpy import types as t
 from zigpy.zcl import (
-    AttributeReadEvent,
     AttributeReportedEvent,
     ClusterType,
     foundation,
@@ -60,27 +59,21 @@ class LightT1ManufacturerCluster(CustomCluster):
         aqara_heartbeat: Final = ZCLAttributeDef(
             id=0x00F7,
             type=t.LVBytes,
-            access="rp",
+            access="p",
             manufacturer_code=AQARA_MFG_CODE,
         )
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the T1 manufacturer cluster."""
         super().__init__(*args, **kwargs)
-        for event_type in (AttributeReadEvent, AttributeReportedEvent):
-            self.on_event(event_type.event_type, self._handle_attribute_event)
+        self.on_event(AttributeReportedEvent.event_type, self._handle_attribute_event)
 
-    def _handle_attribute_event(
-        self, event: AttributeReadEvent | AttributeReportedEvent
-    ) -> None:
+    def _handle_attribute_event(self, event: AttributeReportedEvent) -> None:
         """Handle manufacturer attribute events."""
         if event.attribute_id == self.AttributeDefs.aqara_heartbeat.id:
-            self._handle_heartbeat(
-                event.value,
-                is_reported_event=isinstance(event, AttributeReportedEvent),
-            )
+            self._handle_heartbeat(event.value)
 
-    def _handle_heartbeat(self, data: bytes, is_reported_event: bool) -> None:
+    def _handle_heartbeat(self, data: bytes) -> None:
         """Parse Light Sensor T1 heartbeat and update attributes."""
         while len(data) >= 2:
             tag = data[0]
@@ -99,7 +92,7 @@ class LightT1ManufacturerCluster(CustomCluster):
 
             if tag == 0x01:
                 self.endpoint.power.battery_reported(value)
-            elif is_reported_event and tag == 0x64:
+            elif tag == 0x64:
                 self.endpoint.illuminance.update_attribute(
                     IlluminanceMeasurement.AttributeDefs.measured_value.id,
                     round(10000 * math.log10(value) + 1) if value > 0 else 0,
@@ -108,11 +101,9 @@ class LightT1ManufacturerCluster(CustomCluster):
     async def apply_custom_configuration(self, *args, **kwargs):
         """Read Light Sensor T1 attributes."""
         try:
-            await self.read_attributes(
-                [
-                    self.AttributeDefs.light_sampling_period.id,
-                    self.AttributeDefs.aqara_heartbeat.id,
-                ]
+            await self.read_attributes([self.AttributeDefs.light_sampling_period.id])
+            await self.endpoint.illuminance.read_attributes(
+                [IlluminanceMeasurement.AttributeDefs.measured_value.id]
             )
         except Exception as exc:  # noqa: BLE001
             self.debug("Failed to read attributes: %s", exc, exc_info=True)

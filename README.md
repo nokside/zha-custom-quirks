@@ -1,3 +1,5 @@
+[Home Assistant ZHA Documentation](https://www.home-assistant.io/integrations/zha/)
+
 # Installation
 
 1. Create a directory for custom quirks (e.g., `/config/zha_custom_quirks/`).

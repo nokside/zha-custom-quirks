@@ -9,7 +9,10 @@ from zigpy.zcl.foundation import BaseAttributeDefs, DataTypeId, ZCLAttributeDef
 from zigpy.zdo.types import NodeDescriptor
 
 from zhaquirks import CustomCluster
-from zhaquirks.builder import EntityFilter, QuirkBuilder
+from zhaquirks.builder import QuirkBuilder
+
+
+EXTERNAL_TRIGGER_MODE_FW: Final = 0x00001102
 
 
 class ExternalTriggerMode(t.enum8):
@@ -41,21 +44,19 @@ zbminil2_quirk = (
     .node_descriptor(
         NodeDescriptor(0x02, 0x40, 0x84, 0x1286, 0x52, 0x0400, 0x2C00, 0x0400, 0x00)
     )
-    .removes_entity(
-        EntityFilter(endpoint_id=1, cluster_id=PowerConfiguration.cluster_id)
-    )
+    .removes(PowerConfiguration.cluster_id)
 )
 
 (
     zbminil2_quirk.clone(omit_man_model_data=False)
-    .firmware_version_filter(max_version=0x00001013, allow_missing=True)
+    .firmware_version_filter(max_version=EXTERNAL_TRIGGER_MODE_FW, allow_missing=True)
     .adds(KeepAlive, cluster_type=ClusterType.Client)
     .add_to_registry()
 )
 
 (
     zbminil2_quirk.clone(omit_man_model_data=False)
-    .firmware_version_filter(min_version=0x00001013, allow_missing=False)
+    .firmware_version_filter(min_version=EXTERNAL_TRIGGER_MODE_FW, allow_missing=False)
     .replaces(SonoffEwelinkCluster)
     .enum(
         attribute_name="external_trigger_mode",

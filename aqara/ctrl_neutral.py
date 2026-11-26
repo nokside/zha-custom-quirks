@@ -2,10 +2,11 @@
 
 from typing import Any, Final
 
+from zha.application import Platform
 from zigpy import types as t
 from zigpy.profiles import zha
 from zigpy.typing import AddressingMode
-from zigpy.zcl import AttributeReportedEvent, foundation
+from zigpy.zcl import AttributeReportedEvent, ClusterType, foundation
 from zigpy.zcl.clusters.general import (
     Basic,
     DeviceTemperature,
@@ -16,7 +17,12 @@ from zigpy.zcl.foundation import ZCLAttributeDef, ZCLHeader
 from zigpy.zdo.types import NodeDescriptor
 
 from zhaquirks import CustomCluster, LocalDataCluster
-from zhaquirks.builder import QuirkBuilder
+from zhaquirks.builder import (
+    ButtonEvent,
+    ButtonEventType,
+    EntityFilter,
+    QuirkBuilder,
+)
 from zhaquirks.const import (
     BUTTON_1,
     BUTTON_2,
@@ -235,7 +241,7 @@ class CtrlNeutralDeviceTemperatureCluster(CustomCluster, DeviceTemperature):
         super()._update_attribute(attrid, value)
 
 
-base_quirk = (
+ctrl_neutral = (
     QuirkBuilder()
     .node_descriptor(
         NodeDescriptor(0x02, 0x40, 0x84, 0x1037, 0x7F, 0x0064, 0x0000, 0x0064, 0x00)
@@ -244,8 +250,18 @@ base_quirk = (
     .replaces(OnOffCluster, endpoint_id=2)
     .replaces(CtrlNeutralButtonOnOff, endpoint_id=4)
     .replaces(CtrlNeutralDeviceTemperatureCluster)
-    .prevent_default_entity_creation(endpoint_id=4)
-    .prevent_default_entity_creation(endpoint_id=6)
+    .removes_entity(
+        EntityFilter(
+            endpoint_id=4,
+            cluster_id=OnOff.cluster_id,
+            platform=Platform.SWITCH,
+        ),
+        EntityFilter(
+            endpoint_id=6,
+            cluster_id=OnOff.cluster_id,
+            platform=Platform.SWITCH,
+        ),
+    )
     .replaces_endpoint(2, device_type=zha.DeviceType.ON_OFF_SWITCH)
     .removes(Identify.cluster_id)
     .skip_configuration()
@@ -260,14 +276,24 @@ base_quirk = (
 )
 
 
-(
-    base_quirk.clone()
+ctrl_neutral1_quirk = (
+    ctrl_neutral.clone()
     .applies_to(LUMI, "lumi.ctrl_neutral1")
     .friendly_name(
         manufacturer="Aqara", model="Wall Switch (No Neutral, Single Rocker)"
     )
-    .prevent_default_entity_creation(endpoint_id=3)
-    .prevent_default_entity_creation(endpoint_id=5)
+    .removes_entity(
+        EntityFilter(
+            endpoint_id=3,
+            cluster_id=OnOff.cluster_id,
+            platform=Platform.LIGHT,
+        ),
+        EntityFilter(
+            endpoint_id=5,
+            cluster_id=OnOff.cluster_id,
+            platform=Platform.SWITCH,
+        ),
+    )
     .enum(
         attribute_name="operation_mode_left",
         enum_class=SingleRockerOperationMode,
@@ -275,17 +301,50 @@ base_quirk = (
         translation_key="relay_operation_mode",
         fallback_name="Operation mode",
     )
+    .button_event(
+        events=[
+            ButtonEvent(
+                event_type=ButtonEventType.SINGLE_PRESS,
+                trigger=(SHORT_PRESS, BUTTON_1),
+            ),
+            ButtonEvent(
+                event_type=ButtonEventType.MULTI_PRESS,
+                trigger=(DOUBLE_PRESS, BUTTON_1),
+                press_count=2,
+            ),
+            ButtonEvent(
+                event_type=ButtonEventType.LONG_PRESS_START,
+                trigger=(LONG_PRESS, BUTTON_1),
+            ),
+            ButtonEvent(
+                event_type=ButtonEventType.LONG_PRESS_END,
+                trigger=(LONG_RELEASE, BUTTON_1),
+            ),
+        ],
+        cluster_id=OnOff.cluster_id,
+        cluster_type=ClusterType.Server,
+        endpoint_id=4,
+        unique_id_suffix="button",
+        translation_key="button",
+        fallback_name="Button",
+    )
     .add_to_registry()
 )
 
 
-(
-    base_quirk.clone()
+ctrl_neutral2_quirk = (
+    ctrl_neutral.clone()
     .applies_to(LUMI, "lumi.ctrl_neutral2")
     .friendly_name(
         manufacturer="Aqara", model="Wall Switch (No Neutral, Double Rocker)"
     )
-    .prevent_default_entity_creation(endpoint_id=5)
+    .removes_entity(
+        EntityFilter(
+            endpoint_id=5,
+            cluster_id=OnOff.cluster_id,
+            platform=Platform.SWITCH,
+        ),
+    )
     .replaces(OnOffCluster, endpoint_id=3)
     .replaces(CtrlNeutralButtonOnOff, endpoint_id=5)
     .replaces(CtrlNeutralButtonOnOff, endpoint_id=6)
@@ -315,6 +374,89 @@ base_quirk = (
         cluster_id=Basic.cluster_id,
         translation_key="relay_operation_mode_right",
         fallback_name="Operation mode right",
+    )
+    .button_event(
+        events=[
+            ButtonEvent(
+                event_type=ButtonEventType.SINGLE_PRESS,
+                trigger=(SHORT_PRESS, BUTTON_1),
+            ),
+            ButtonEvent(
+                event_type=ButtonEventType.MULTI_PRESS,
+                trigger=(DOUBLE_PRESS, BUTTON_1),
+                press_count=2,
+            ),
+            ButtonEvent(
+                event_type=ButtonEventType.LONG_PRESS_START,
+                trigger=(LONG_PRESS, BUTTON_1),
+            ),
+            ButtonEvent(
+                event_type=ButtonEventType.LONG_PRESS_END,
+                trigger=(LONG_RELEASE, BUTTON_1),
+            ),
+        ],
+        cluster_id=OnOff.cluster_id,
+        cluster_type=ClusterType.Server,
+        endpoint_id=4,
+        unique_id_suffix="button_1",
+        translation_key="button_numbered",
+        translation_placeholders={"number": "1"},
+        fallback_name="Button 1",
+    )
+    .button_event(
+        events=[
+            ButtonEvent(
+                event_type=ButtonEventType.SINGLE_PRESS,
+                trigger=(SHORT_PRESS, BUTTON_2),
+            ),
+            ButtonEvent(
+                event_type=ButtonEventType.MULTI_PRESS,
+                trigger=(DOUBLE_PRESS, BUTTON_2),
+                press_count=2,
+            ),
+            ButtonEvent(
+                event_type=ButtonEventType.LONG_PRESS_START,
+                trigger=(LONG_PRESS, BUTTON_2),
+            ),
+            ButtonEvent(
+                event_type=ButtonEventType.LONG_PRESS_END,
+                trigger=(LONG_RELEASE, BUTTON_2),
+            ),
+        ],
+        cluster_id=OnOff.cluster_id,
+        cluster_type=ClusterType.Server,
+        endpoint_id=5,
+        unique_id_suffix="button_2",
+        translation_key="button_numbered",
+        translation_placeholders={"number": "2"},
+        fallback_name="Button 2",
+    )
+    .button_event(
+        events=[
+            ButtonEvent(
+                event_type=ButtonEventType.SINGLE_PRESS,
+                trigger=(SHORT_PRESS, BOTH_BUTTONS),
+            ),
+            ButtonEvent(
+                event_type=ButtonEventType.MULTI_PRESS,
+                trigger=(DOUBLE_PRESS, BOTH_BUTTONS),
+                press_count=2,
+            ),
+            ButtonEvent(
+                event_type=ButtonEventType.LONG_PRESS_START,
+                trigger=(LONG_PRESS, BOTH_BUTTONS),
+            ),
+            ButtonEvent(
+                event_type=ButtonEventType.LONG_PRESS_END,
+                trigger=(LONG_RELEASE, BOTH_BUTTONS),
+            ),
+        ],
+        cluster_id=OnOff.cluster_id,
+        cluster_type=ClusterType.Server,
+        endpoint_id=6,
+        unique_id_suffix="button_both",
+        translation_key="both_buttons",
+        fallback_name="Both buttons",
     )
     .add_to_registry()
 )

@@ -27,7 +27,6 @@ Some optional ZHA settings that may improve compatibility and functionality in c
 ```yaml
 zha:
   zigpy_config:
-    source_routing: true # May improve routing in some larger Zigbee networks.
     ezsp_policies:
       TRUST_CENTER_POLICY: 0x0002 # Required for certain devices, such as Philips Hue Motion Sensors (SML001/SML002).
     ota:
